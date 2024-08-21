@@ -82,6 +82,65 @@ vector<double> readDataFromFile(const char* filename, int lineNumber) {
 }
 
 /**
+ * @Method: compute_distances
+ * @Description: 计算数据集X中每个数据点与数据集Y中所有数据点的距离
+ * @param int start 开始位置
+ * @param int end 结束位置
+ */
+void calculateDistances(int start, int end) {
+    for (int i = start; i < end; ++i) {
+        priority_queue<double> heap;
+        for (int j = 0; j < data_y.size(); ++j) {
+            double distance_ij = 0;
+            for (int k = 0; k < data_x[i].size(); ++k) {
+                distance_ij += pow(data_x[i][k] - data_y[j][k], 2);
+            }
+            if (heap.size() < K_MAX) {
+                heap.push(distance_ij);
+            } else if (distance_ij < heap.top()) {
+                heap.pop();
+                heap.push(distance_ij);
+            }
+        }
+        while (!heap.empty()) {
+            distances[i][heap.size() - 1] = heap.top();
+            heap.pop();
+        }
+    }
+}
+
+/**
+ * @Method: encryptData
+ * @Description: 对数据集X进行加密
+ * @param int start 开始位置
+ * @param int end 结束位置
+ * @param double r11 随机数R11
+ * @param double r12 随机数R12
+ * @param double r13 随机数R13
+ */
+void encryptData(int start, int end, double r11, double r12, double r13) {
+    for (int i = start; i < end; ++i) {
+        vector<double> t(data_x[i].size() + 5);
+        double quadratic_sum = 0;
+        for (int j = 0; j < data_x[i].size(); ++j) {
+            quadratic_sum += pow(data_x[i][j], 2);
+            t[j + 1] = data_x[i][j] * -2 * r11;
+        }
+        t[data_x[i].size() + 1] = r11;
+        t[data_x[i].size() + 2] = r11 * r12;
+        t[data_x[i].size() + 3] = r11 * -r12;
+        t[data_x[i].size() + 4] = r13;
+
+        for (int k = 0; k < K_MAX; ++k) {
+            t[0] = (quadratic_sum - distances[i][k]) * r11;
+            VectorXd v = Eigen::Map<VectorXd>(t.data(), t.size());
+            v = encryptMatrix.transpose() * v;
+            ciphertext[i][k] = v;
+        }
+    }
+}
+
+/**
   * @Method: dealData
   * @Description: 对数据集进行预计算
   * @param char* fileString_x 读取数据集x的地址
@@ -113,27 +172,52 @@ int dealData(char* fileString_x, char* fileString_y) {
     distances = vector<vector<double>>(data_x.size(), vector<double>(K_MAX));
     // 定义一个优先队列，用于存储距离
     priority_queue<double> heap;
-    for (int i = 0; i < data_x.size(); i++) {
-        for (int j = 0; j < data_y.size(); j++) {
-            double distance_ij = 0;
-            // 计算距离
-            for (int k = 0; k < data_x[i].size(); k++) {
-                distance_ij += pow(data_x[i][k] - data_y[j][k], 2);
-            }
-            // 维护优先队列的大小为K_MAX
-            if (heap.size() < K_MAX) {
-                heap.push(distance_ij);
-            } else if (distance_ij < heap.top()) {
-                heap.pop();
-                heap.push(distance_ij);
-            }
-        }
-        // 将优先队列中的元素存入距离矩阵
-        while (!heap.empty()) {
-            distances[i][heap.size() - 1] = heap.top();
-            heap.pop();
-        }
+
+    // for (int i = 0; i < data_x.size(); i++) {
+    //     for (int j = 0; j < data_y.size(); j++) {
+    //         double distance_ij = 0;
+    //         // 计算距离
+    //         for (int k = 0; k < data_x[i].size(); k++) {
+    //             distance_ij += pow(data_x[i][k] - data_y[j][k], 2);
+    //         }
+    //         // 维护优先队列的大小为K_MAX
+    //         if (heap.size() < K_MAX) {
+    //             heap.push(distance_ij);
+    //         } else if (distance_ij < heap.top()) {
+    //             heap.pop();
+    //             heap.push(distance_ij);
+    //         }
+    //     }
+    //     // 将优先队列中的元素存入距离矩阵
+    //     while (!heap.empty()) {
+    //         distances[i][heap.size() - 1] = heap.top();
+    //         heap.pop();
+    //     }
+    // }
+
+    // int num_threads = thread::hardware_concurrency(); // 获取可用的线程数
+    int num_threads = 30; // 设置线程数
+    vector<thread> threads;
+    int data_size = data_x.size();
+    int chunk_size = data_size / num_threads;
+
+    for (int t = 0; t < num_threads; ++t) {
+        int start = t * chunk_size;
+        int end = (t == num_threads - 1) ? data_size : start + chunk_size;
+        threads.emplace_back(calculateDistances, start, end);
     }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    end_time = chrono::high_resolution_clock::now();
+    total_duration = end_time - start_time;
+    // 输出时间间隔
+    printf("预处理数据的总时间是：%f 毫秒\n", total_duration.count());
+    fflush(stdout);
+
+    start_time = chrono::high_resolution_clock::now();
 
     // 初始化密文矩阵
     ciphertext = vector<vector<VectorXd>>(data_x.size(), vector<VectorXd>(K_MAX));
@@ -151,35 +235,51 @@ int dealData(char* fileString_x, char* fileString_y) {
     }
     R11 = r11; // 保存r11的值
 
-    // 对每个明文数据进行加密
-    for (int i = 0; i < data_x.size(); i++) {
-        vector<double> t(data_x[i].size() + 5);
+    // // 对每个明文数据进行加密
+    // for (int i = 0; i < data_x.size(); i++) {
+    //     vector<double> t(data_x[i].size() + 5);
+    //
+    //     // 计算每一维数据的平方和
+    //     double quadratic_sum = 0;
+    //     for (int j = 0; j < data_x[i].size(); j++) {
+    //         quadratic_sum += pow(data_x[i][j], 2);
+    //         t[j + 1] = data_x[i][j] * -2 * r11;
+    //     }
+    //     t[data_x[i].size() + 1] = r11;
+    //     t[data_x[i].size() + 2] = r11 * r12;
+    //     t[data_x[i].size() + 3] = r11 * -r12;
+    //     t[data_x[i].size() + 4] = r13;
+    //
+    //     // 将vector<double>转换为Eigen::VectorXd
+    //     for (int k = 0; k < K_MAX; k++) {
+    //         t[0] = (quadratic_sum - distances[i][k]) * r11;
+    //         VectorXd v = Eigen::Map<VectorXd>(t.data(), t.size()); // 将vector<double>转换为Eigen::VectorXd
+    //         // 加密
+    //         v = encryptMatrix.transpose() * v;
+    //         ciphertext[i][k] = v; // 将加密后的数据存储到ciphertext中
+    //     }
+    // }
 
-        // 计算每一维数据的平方和
-        double quadratic_sum = 0;
-        for (int j = 0; j < data_x[i].size(); j++) {
-            quadratic_sum += pow(data_x[i][j], 2);
-            t[j + 1] = data_x[i][j] * -2 * r11;
-        }
-        t[data_x[i].size() + 1] = r11;
-        t[data_x[i].size() + 2] = r11 * r12;
-        t[data_x[i].size() + 3] = r11 * -r12;
-        t[data_x[i].size() + 4] = r13;
+    vector<thread> threads2;
+    data_size = data_x.size();
+    chunk_size = data_size / num_threads;
 
-        // 将vector<double>转换为Eigen::VectorXd
-        for (int k = 0; k < K_MAX; k++) {
-            t[0] = (quadratic_sum - distances[i][k]) * r11;
-            VectorXd v = Eigen::Map<VectorXd>(t.data(), t.size()); // 将vector<double>转换为Eigen::VectorXd
-            // 加密
-            v = encryptMatrix.transpose() * v;
-            ciphertext[i][k] = v; // 将加密后的数据存储到ciphertext中
-        }
+    for (int t = 0; t < num_threads; ++t) {
+        int start = t * chunk_size;
+        int end = (t == num_threads - 1) ? data_size : start + chunk_size;
+        threads2.emplace_back(encryptData, start, end, r11, r12, r13);
     }
+
+    for (auto& th : threads2) {
+        th.join();
+    }
+
+
 
     end_time = chrono::high_resolution_clock::now();
     total_duration = end_time - start_time;
     // 输出时间间隔
-    printf("预处理和加密数据的总时间是：%f 毫秒\n", total_duration.count());
+    printf("加密数据的总时间是：%f 毫秒\n", total_duration.count());
     fflush(stdout);
     cout << "--------------------------------------------" << endl;
 
