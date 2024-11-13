@@ -18,6 +18,12 @@
 #include <atomic>
 #include <cmath>
 
+#ifdef _WIN32
+#define EXPORT_SYMBOL __declspec(dllexport)
+#else
+#define EXPORT_SYMBOL __attribute__((visibility("default")))
+#endif
+
 // 定义最大堆的大小
 const int K_MAX = 5;
 
@@ -37,40 +43,51 @@ extern vector<vector<VectorXd>> ciphertext;
 extern MatrixXd encryptMatrix;
 
 
-/**
- * @Method: readDataFromFile
- * @Description: 读取文件中的doubles，并返回一个vector<vector<double>>类型的数据
- * @param char* filename 文件名
- * @return vector<vector<double>> doubles数据
- */
-vector<vector<double>> readDataFromFile(const char* filename);
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
-/**
- * @Method: readDataFromFile
- * @Description: 读取文件中指定行的doubles，并返回一个vector<double>类型的数据
- * @param const char* filename 文件名
- * @param int lineNumber 行号
- * @return vector<double> doubles数据
- */
-vector<double> readDataFromFile(const char* filename, int lineNumber);
+	/**
+	 * @Method: readDataFromFile
+	 * @Description: 读取文件中的doubles，并返回一个vector<vector<double>>类型的数据
+	 * @param char* filename 文件名
+	 * @return vector<vector<double>> doubles数据
+	 */
+	vector<vector<double>> readDataFromFile1(const char* filename);
 
-/**
-  * @Method: dealData
-  * @Description: 对数据集进行预计算
-  * @param char* fileString_x 读取数据集x的地址
-  * @param char* fileString_y 读取数据集y的地址
-  * @return 状态码，1：成功；0：失败
-  */
-int dealData(char* fileString_x, char* fileString_y);
+	/**
+	 * @Method: readDataFromFile
+	 * @Description: 读取文件中指定行的doubles，并返回一个vector<double>类型的数据
+	 * @param const char* filename 文件名
+	 * @param int lineNumber 行号
+	 * @return vector<double> doubles数据
+	 */
+	vector<double> readDataFromFile2(const char* filename, int lineNumber);
 
-/**
- * @Method: RSQ
- * @Description: 发起查询请求，并返回查询结果
- * @param char* fileString 读取数据的地址
- * @param char* resultFilePath 输出数据的地址
- * @return 状态码，1：成功；0：失败
- */
-int RSQ(char* fileString, char* resultFilePath);
+	/**
+	  * @Method: dealData
+	  * @Description: 对数据集进行预计算
+	  * @param char* fileString_x 读取数据集x的地址
+	  * @param char* fileString_y 读取数据集y的地址
+	  * @return 状态码，1：成功；0：失败
+	  */
+	int dealData(char* fileString_x, char* fileString_y);
 
+	/**
+	 * @Method: RSQ
+	 * @Description: 发起查询请求，并返回查询结果
+	 * @param char* fileString 读取数据的地址
+	 * @param char* resultFilePath 输出数据的地址
+	 * @return 状态码，1：成功；0：失败
+	 */
+	int RSQ(char* fileString, char* resultFilePath);
+
+	EXPORT_SYMBOL int init_algo(char* fileString_x, char* fileString_y);
+	EXPORT_SYMBOL int query_algo(char* fileString, char* resultFilePath);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //RSQ_H

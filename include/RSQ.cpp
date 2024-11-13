@@ -6,6 +6,12 @@
 
 #include "RSQ.h"
 
+#ifdef _WIN32
+#define EXPORT_SYMBOL __declspec(dllexport)
+#else
+#define EXPORT_SYMBOL __attribute__((visibility("default")))
+#endif
+
 // 保存随机数R11，方便后续解密
 double R11;
 
@@ -28,7 +34,7 @@ MatrixXd encryptMatrix;
  * @param char* filename 文件名
  * @return vector<vector<double>> doubles数据
  */
-vector<vector<double>> readDataFromFile(const char* filename) {
+vector<vector<double>> readDataFromFile1(const char* filename) {
     vector<vector<double>> data_list;
     ifstream infile(filename);
 
@@ -61,7 +67,7 @@ vector<vector<double>> readDataFromFile(const char* filename) {
  * @param int lineNumber 行号
  * @return vector<double> doubles数据
  */
-vector<double> readDataFromFile(const char* filename, int lineNumber) {
+vector<double> readDataFromFile2(const char* filename, int lineNumber) {
     ifstream infile(filename);
     string line;
     vector<double> result;
@@ -91,8 +97,8 @@ vector<double> readDataFromFile(const char* filename, int lineNumber) {
 int dealData(char* fileString_x, char* fileString_y) {
     auto start_time = chrono::high_resolution_clock::now();
     // 读取数据集X和Y
-    data_x = readDataFromFile(fileString_x);
-    data_y = readDataFromFile(fileString_y);
+    data_x = readDataFromFile1(fileString_x);
+    data_y = readDataFromFile1(fileString_y);
 
     // 获取结束时间点
     auto end_time = chrono::high_resolution_clock::now();
@@ -195,8 +201,8 @@ int dealData(char* fileString_x, char* fileString_y) {
  */
 int RSQ(char* fileString, char* resultFilePath) {
     vector<vector<double>> query_data(2); // 读取查询数据
-    query_data[0] = readDataFromFile(fileString, 1);
-    query_data[1] = readDataFromFile(fileString, 2);
+    query_data[0] = readDataFromFile2(fileString, 1);
+    query_data[1] = readDataFromFile2(fileString, 2);
 
     // 检查查询数据是否为空
     if (query_data[0].size() == 0 || query_data[1].size() == 0) {
@@ -260,4 +266,11 @@ int RSQ(char* fileString, char* resultFilePath) {
         return 0;
     }
     return 1;
+}
+
+EXPORT_SYMBOL int init_algo(char* fileString_x, char* fileString_y) {
+    return dealData(fileString_x, fileString_y);
+}
+EXPORT_SYMBOL int query_algo(char* fileString, char* resultFilePath) {
+    return RSQ(fileString, resultFilePath);
 }
